@@ -17,12 +17,9 @@ admin.firestore().settings({
   ssl: false
 })
 
-// OJO FALTA HACER QUE ESTO OCURRA UNA VEZ AL MES !!!!!
-//////////////////////////
-////////////////
+// testing with onRequest, couldn't test Schedule on emulator
 
-
-export const loadData = functions.https.onRequest(async (request, response) => {
+export const makeInvoices = functions.https.onRequest(async (request, response) => {
     try {
         
         const storesKeysDict = {
@@ -64,7 +61,7 @@ export const loadData = functions.https.onRequest(async (request, response) => {
 
         // Perform invoices
         const endpoint = 'http://127.0.0.1:5001/gig-test-proj/us-central1/makeInvoice'
-
+        const invoices = []
         for (let store in payload) {
                 // set headers for this store
             const storeKey = storesKeysDict[store] as string
@@ -143,31 +140,37 @@ export const loadData = functions.https.onRequest(async (request, response) => {
                         headers,
                         invoiceReq
                       }
-                    console.log(invoiceReq)
 
-                    await axios.post(endpoint, body)
+                    //if (invoices.length < 4) { // was testing exact amount that causes timeout
+                        const {data} = await (axios.post(endpoint, body))
+                        invoices.push(data)
+                    //}
                 }
             }
         }
+        
+        const collectionRef = admin.firestore().collection(`Stores`)
+        for (let invoiceData of invoices) {
+            await collectionRef.add(invoiceData)
+        }
 
-        response.send('Change this message if successful');
+        response.send('Invoices created and saved');
 
   } catch (error) {
-    response.status(500).json({ error })
+    response.status(500).json({ error: error })
   } 
 });
 
 export const makeInvoice = functions.https.onRequest(async (request, response) => {
     try {
-        const { invoiceReq, headers, store } = request.body
-        const collectionRef = admin.firestore().collection(`Store_${store}`)
+        const { invoiceReq, headers } = request.body
         const endpoint = 'https://gigstack-cfdi-bjekv7t4.uc.gateway.dev/v1/invoices/create'
         const { data } = await axios.post(endpoint, invoiceReq, { headers } )
-        await collectionRef.add(data)
-
-        response.send('Invoice created')
+        response.json(data)
 
     } catch (error) {
-        response.status(500).json({ error })
+        response.status(500).json({ errorFrom: error })
     }
 })
+
+
